@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
+enum UserRank {
+  TRAINEE
+  JUNIOR
+  MIDDLE
+  SENIOR
+  LEAD
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum SubmissionStatus {
+  PASSED
+  FAILED
+  ERROR
+}
+
+enum LessonStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// ============================================================
+// Users
+// ============================================================
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  avatarUrl     String?   @map("avatar_url")
+  role          UserRole  @default(STUDENT)
+  rank          UserRank  @default(TRAINEE)
+  xp            Int       @default(0)
+  streakDays    Int       @default(0) @map("streak_days")
+  lastActiveAt  DateTime? @map("last_active_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  enrollments       Enrollment[]
+  submissions       Submission[]
+  userAchievements  UserAchievement[]
+  subscriptions     Subscription[]
+  lessonProgress    LessonProgress[]
+
+  @@map("users")
+}
+
+// ============================================================
+// Courses, Modules, Lessons
+// ============================================================
+
+model Course {
+  id          Int         @id @default(autoincrement())
+  title       String
+  description String
+  level       CourseLevel @default(BEGINNER)
+  coverUrl    String?     @map("cover_url")
+  isPublished Boolean     @default(false) @map("is_published")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  modules     Module[]
+  enrollments Enrollment[]
+
+  @@map("courses")
+}
+
+model Module {
+  id        Int      @id @default(autoincrement())
+  courseId  Int      @map("course_id")
+  title     String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId])
+  @@map("modules")
+}
+
+model Lesson {
+  id        Int      @id @default(autoincrement())
+  moduleId  Int      @map("module_id")
+  title     String
+  content   String
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  module   Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+  progress LessonProgress[]
+
+  @@index([moduleId])
+  @@map("lessons")
+}
+
+// ============================================================
+// Tasks & Verification
+// ============================================================
+
+model Task {
+  id          Int      @id @default(autoincrement())
+  lessonId    Int      @map("lesson_id")
+  title       String
+  description String
+  starterCode String   @map("starter_code")
+  xpReward    Int      @default(10) @map("xp_reward")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  testCases   TestCase[]
+  submissions Submission[]
+
+  @@index([lessonId])
+  @@map("tasks")
+}
+
+model TestCase {
+  id             Int     @id @default(autoincrement())
+  taskId         Int     @map("task_id")
+  input          String
+  expectedOutput String  @map("expected_output")
+  isHidden       Boolean @default(false) @map("is_hidden")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("test_cases")
+}
+
+model Submission {
+  id          Int              @id @default(autoincrement())
+  userId      Int              @map("user_id")
+  taskId      Int              @map("task_id")
+  code        String
+  status      SubmissionStatus
+  submittedAt DateTime         @default(now()) @map("submitted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([taskId])
+  @@map("submissions")
+}
+
+// ============================================================
+// Enrollments & Progress
+// ============================================================
+
+model Enrollment {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  courseId   Int      @map("course_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  id          Int          @id @default(autoincrement())
+  userId      Int          @map("user_id")
+  lessonId    Int          @map("lesson_id")
+  status      LessonStatus @default(NOT_STARTED)
+  completedAt DateTime?    @map("completed_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@map("lesson_progress")
+}
+
+// ============================================================
+// Gamification
+// ============================================================
+
+model Achievement {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  title       String
+  description String
+  condition   String
+  xpReward    Int     @default(0) @map("xp_reward")
+  iconUrl     String? @map("icon_url")
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  achievementId Int      @map("achievement_id")
+  unlockedAt    DateTime @default(now()) @map("unlocked_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+// ============================================================
+// Subscriptions
+// ============================================================
+
+model Plan {
+  id             Int     @id @default(autoincrement())
+  name           String
+  durationMonths Int     @map("duration_months")
+  price          Decimal @db.Decimal(10, 2)
+  isActive       Boolean @default(true) @map("is_active")
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id        Int                @id @default(autoincrement())
+  userId    Int                @map("user_id")
+  planId    Int                @map("plan_id")
+  startDate DateTime           @default(now()) @map("start_date")
+  endDate   DateTime           @map("end_date")
+  status    SubscriptionStatus @default(ACTIVE)
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([userId])
+  @@map("subscriptions")
+}
