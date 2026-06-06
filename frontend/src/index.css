@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-cream-100 text-ink-900 font-sans;
+    font-feature-settings: 'ss01', 'ss02', 'cv11';
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+}
+
+@layer components {
+  .display {
+    @apply font-display tracking-tight;
+    font-optical-sizing: auto;
+  }
+}
